@@ -1,16 +1,20 @@
-import { useState } from 'react';
+import {useState} from 'react';
 
-function Square({ value, onSquareClick }) {
+function Square({value, onSquareClick, isHighlight}) {
   return (
-      <button className="square" onClick={onSquareClick}>
+      <button className={`square ${isHighlight ? 'highlight' : ''}`} onClick={onSquareClick}>
         {value}
       </button>
   );
 }
 
-function Board({ xIsNext, squares, onPlay }) {
+function Board({xIsNext, squares, onPlay, readonly}) {
   function handleClick(i) {
-    if (calculateWinner(squares) || squares[i]) {
+    if (readonly) {
+      return;
+    }
+    const [winner] = calculateWinner(squares);
+    if (winner || squares[i]) {
       return;
     }
     const nextSquares = squares.slice();
@@ -22,32 +26,33 @@ function Board({ xIsNext, squares, onPlay }) {
     onPlay(nextSquares);
   }
 
-  const winner = calculateWinner(squares);
+  const [winner, highlightMove] = calculateWinner(squares);
   let status;
   if (winner) {
     status = 'Winner: ' + winner;
   } else {
-    status = 'Next player: ' + (xIsNext ? 'X' : 'O');
+    // 是否平局
+    const hasNext = squares.some(item => !item)
+    if (hasNext) {
+      status = 'Next player: ' + (xIsNext ? 'X' : 'O');
+    } else {
+      status = 'No Winner: Tie';
+    }
   }
-
   return (
       <>
-        <div className="status">{status}</div>
-        <div className="board-row">
-          <Square value={squares[0]} onSquareClick={() => handleClick(0)} />
-          <Square value={squares[1]} onSquareClick={() => handleClick(1)} />
-          <Square value={squares[2]} onSquareClick={() => handleClick(2)} />
-        </div>
-        <div className="board-row">
-          <Square value={squares[3]} onSquareClick={() => handleClick(3)} />
-          <Square value={squares[4]} onSquareClick={() => handleClick(4)} />
-          <Square value={squares[5]} onSquareClick={() => handleClick(5)} />
-        </div>
-        <div className="board-row">
-          <Square value={squares[6]} onSquareClick={() => handleClick(6)} />
-          <Square value={squares[7]} onSquareClick={() => handleClick(7)} />
-          <Square value={squares[8]} onSquareClick={() => handleClick(8)} />
-        </div>
+        {!readonly && <div className="status">{status}</div>}
+        {/* 2.重写 Board 为使用两个循环来制作正方形，而不是硬编码它们。*/}
+        {Array(3).fill(null).map((_, i) => {
+          return (<div key={i} className="board-row">
+            {Array(3).fill(null).map((_, j) => {
+              const currentIndex = i * 3 + j
+              // 4.当有人获胜时，突出显示导致获胜的三个方块（如果没有人获胜，则显示有关结果是平局的消息）
+              return <Square isHighlight={highlightMove.includes(currentIndex)} key={currentIndex}
+                             value={squares[currentIndex]} onSquareClick={() => handleClick(currentIndex)}/>
+            })}
+          </div>)
+        })}
       </>
   );
 }
@@ -55,6 +60,7 @@ function Board({ xIsNext, squares, onPlay }) {
 export default function Game() {
   const [history, setHistory] = useState([Array(9).fill(null)]);
   const [currentMove, setCurrentMove] = useState(0);
+  const [isAsc, setIsAsc] = useState(true);
   const xIsNext = currentMove % 2 === 0;
   const currentSquares = history[currentMove];
 
@@ -68,7 +74,12 @@ export default function Game() {
     setCurrentMove(nextMove);
   }
 
-  const moves = history.map((squares, move) => {
+  // 添加一个切换按钮，让您按升序或降序对移动进行排序。
+  function sortMove() {
+    setIsAsc(!isAsc)
+  }
+
+  let moves = history.map((squares, move) => {
     let description;
     if (move > 0) {
       description = 'Go to move #' + move;
@@ -76,11 +87,20 @@ export default function Game() {
       description = 'Go to game start';
     }
     return (
+        // 1.仅针对当前移动，显示“您正在移动 #...”而不是按钮
         <li key={move}>
-          <button onClick={() => jumpTo(move)}>{description}</button>
+          {(
+              // 5.在移动历史记录列表中以格式（行、列）显示每个移动的位置。
+              <div className="move-step">
+                {move === currentMove ? (<span>{description}</span>) : (
+                    <button style={{height: '50px'}} onClick={() => jumpTo(move)}>{description}</button>)}
+                <div><Board squares={squares} readonly/></div>
+              </div>
+          )}
         </li>
     );
   });
+  !isAsc && (moves = moves.reverse())
 
   return (
       <div className="game">
@@ -88,6 +108,8 @@ export default function Game() {
           <Board xIsNext={xIsNext} squares={currentSquares} onPlay={handlePlay} />
         </div>
         <div className="game-info">
+          {/* 3.添加一个切换按钮，让您按升序或降序对移动进行排序。*/}
+          <button onClick={sortMove}>{isAsc ? 'asc' : 'desc'}</button>
           <ol>{moves}</ol>
         </div>
       </div>
@@ -108,8 +130,8 @@ function calculateWinner(squares) {
   for (let i = 0; i < lines.length; i++) {
     const [a, b, c] = lines[i];
     if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
-      return squares[a];
+      return [squares[a], lines[i]];
     }
   }
-  return null;
+  return [null, []];
 }
